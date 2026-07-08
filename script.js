@@ -450,38 +450,27 @@ function drawVerticalLens(targetCtx, x, y, width, height) {
   targetCtx.closePath();
 }
 
-function drawTurnFrameSide(targetCtx, radius, side, faceScale, edgeAmount, front) {
-  if (edgeAmount < 0.04) {
+function drawTurnFrameRim(targetCtx, radius, side, faceScale, edgeAmount, faceShiftX, front) {
+  if (edgeAmount < 0.14) {
     return;
   }
 
   const sideSign = Math.sign(side) || 1;
-  const faceHalfWidth = radius * 0.82 * faceScale;
-  const width = radius * (0.12 + edgeAmount * 0.3);
-  const height = radius * (1.58 + edgeAmount * 0.14);
-  const x = sideSign * (faceHalfWidth + width * 0.18);
-  const gradient = targetCtx.createLinearGradient(x - width, 0, x + width, 0);
+  const rimX = faceShiftX + sideSign * radius * 0.82 * faceScale;
+  const width = radius * (0.025 + edgeAmount * 0.055);
+  const height = radius * (1.42 + edgeAmount * 0.1);
+  const gradient = targetCtx.createLinearGradient(rimX - width, 0, rimX + width, 0);
 
-  gradient.addColorStop(0, front ? "#281014" : "#080a0f");
-  gradient.addColorStop(0.26, sideSign > 0 ? "#ef453e" : "#168d9b");
-  gradient.addColorStop(0.54, front ? "#252b34" : "#12161f");
-  gradient.addColorStop(0.82, sideSign > 0 ? "#1ec8d7" : "#ef453e");
-  gradient.addColorStop(1, "#06070b");
+  gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+  gradient.addColorStop(0.42, sideSign > 0 ? "rgba(255, 82, 74, 0.58)" : "rgba(45, 222, 232, 0.52)");
+  gradient.addColorStop(0.62, front ? "rgba(255, 255, 255, 0.28)" : "rgba(255, 255, 255, 0.13)");
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
   targetCtx.save();
-  targetCtx.globalAlpha = 0.58 + edgeAmount * 0.36;
-  drawVerticalLens(targetCtx, x, 0, width, height);
+  targetCtx.globalAlpha = 0.32 + edgeAmount * 0.38;
+  drawVerticalLens(targetCtx, rimX, 0, width, height);
   targetCtx.fillStyle = gradient;
   targetCtx.fill();
-  targetCtx.lineWidth = Math.max(1, radius * 0.012);
-  targetCtx.strokeStyle = front ? "rgba(255, 255, 255, 0.22)" : "rgba(255, 255, 255, 0.12)";
-  targetCtx.stroke();
-
-  targetCtx.globalAlpha = 0.2 + edgeAmount * 0.32;
-  targetCtx.strokeStyle = sideSign > 0 ? "rgba(255, 104, 90, 0.92)" : "rgba(61, 226, 235, 0.82)";
-  targetCtx.lineWidth = Math.max(1, radius * 0.01);
-  drawVerticalLens(targetCtx, x + sideSign * width * 0.16, 0, width * 0.34, height * 0.92);
-  targetCtx.stroke();
   targetCtx.restore();
 }
 
@@ -548,21 +537,8 @@ function createTurnFrame(radius, frameSize, angle, baseSize) {
   frameCtx.imageSmoothingQuality = "high";
   frameCtx.translate(frameSize / 2, frameSize / 2);
 
-  drawTurnFrameSide(frameCtx, radius, side, faceScale, edgeAmount, front);
   drawTurnFrameFace(frameCtx, radius, baseSize, angle, faceScale, faceShiftX, front);
-
-  if (edgeAmount > 0.08) {
-    const sideSign = Math.sign(side) || 1;
-    const rimX = faceShiftX + sideSign * radius * 0.82 * faceScale;
-
-    frameCtx.save();
-    frameCtx.globalAlpha = 0.18 + edgeAmount * 0.34;
-    frameCtx.strokeStyle = sideSign > 0 ? "rgba(255, 226, 218, 0.75)" : "rgba(170, 248, 255, 0.7)";
-    frameCtx.lineWidth = Math.max(1, radius * 0.012);
-    drawVerticalLens(frameCtx, rimX, 0, radius * 0.05, radius * 1.5);
-    frameCtx.stroke();
-    frameCtx.restore();
-  }
+  drawTurnFrameRim(frameCtx, radius, side, faceScale, edgeAmount, faceShiftX, front);
 
   return {
     canvas: frame,
