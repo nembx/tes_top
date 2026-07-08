@@ -439,41 +439,6 @@ function prepareLogoFrameBuffer(size) {
   logoBufferCtx.clearRect(0, 0, size, size);
 }
 
-function drawVerticalLens(targetCtx, x, y, width, height) {
-  const halfW = width / 2;
-  const halfH = height / 2;
-
-  targetCtx.beginPath();
-  targetCtx.moveTo(x, y - halfH);
-  targetCtx.bezierCurveTo(x + halfW, y - halfH * 0.88, x + halfW, y + halfH * 0.88, x, y + halfH);
-  targetCtx.bezierCurveTo(x - halfW, y + halfH * 0.88, x - halfW, y - halfH * 0.88, x, y - halfH);
-  targetCtx.closePath();
-}
-
-function drawTurnFrameRim(targetCtx, radius, side, faceScale, edgeAmount, faceShiftX, front) {
-  if (edgeAmount < 0.14) {
-    return;
-  }
-
-  const sideSign = Math.sign(side) || 1;
-  const rimX = faceShiftX + sideSign * radius * 0.82 * faceScale;
-  const width = radius * (0.025 + edgeAmount * 0.055);
-  const height = radius * (1.42 + edgeAmount * 0.1);
-  const gradient = targetCtx.createLinearGradient(rimX - width, 0, rimX + width, 0);
-
-  gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
-  gradient.addColorStop(0.42, sideSign > 0 ? "rgba(255, 82, 74, 0.58)" : "rgba(45, 222, 232, 0.52)");
-  gradient.addColorStop(0.62, front ? "rgba(255, 255, 255, 0.28)" : "rgba(255, 255, 255, 0.13)");
-  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-
-  targetCtx.save();
-  targetCtx.globalAlpha = 0.32 + edgeAmount * 0.38;
-  drawVerticalLens(targetCtx, rimX, 0, width, height);
-  targetCtx.fillStyle = gradient;
-  targetCtx.fill();
-  targetCtx.restore();
-}
-
 function drawTurnFrameFace(targetCtx, radius, baseSize, angle, faceScale, faceShiftX, front) {
   const turn = Math.cos(angle);
   const side = Math.sin(angle);
@@ -538,7 +503,6 @@ function createTurnFrame(radius, frameSize, angle, baseSize) {
   frameCtx.translate(frameSize / 2, frameSize / 2);
 
   drawTurnFrameFace(frameCtx, radius, baseSize, angle, faceScale, faceShiftX, front);
-  drawTurnFrameRim(frameCtx, radius, side, faceScale, edgeAmount, faceShiftX, front);
 
   return {
     canvas: frame,
@@ -585,29 +549,7 @@ function drawLogoTurnFrame(radius, angle, alpha) {
   ctx.restore();
 }
 
-function drawSpinningLogo(radius, spinRatio) {
-  const visualSpin = state.top.visualSpin;
-  const direction = Math.sign(visualSpin || state.top.spin) || 1;
-  const blurSpan = clamp(Math.abs(visualSpin) * 0.011, 0.05, 0.58);
-  const samples = spinRatio > 0.78 ? 7 : spinRatio > 0.44 ? 5 : spinRatio > 0.18 ? 3 : 1;
-
-  if (spinRatio > 0.12) {
-    const center = (samples - 1) / 2;
-
-    for (let i = 0; i < samples; i += 1) {
-      const offsetIndex = i - center;
-
-      if (offsetIndex === 0) {
-        continue;
-      }
-
-      const distanceFromCenter = Math.abs(offsetIndex) / center;
-      const offset = direction * offsetIndex * (blurSpan / center);
-      const alpha = spinRatio * 0.12 * (1 - distanceFromCenter * 0.48);
-      drawLogoTurnFrame(radius, state.top.angle + offset, alpha);
-    }
-  }
-
+function drawSpinningLogo(radius) {
   drawLogoTurnFrame(radius, state.top.angle, 1);
 }
 
@@ -680,7 +622,7 @@ function drawTop() {
   ctx.translate(top.x, top.y);
   ctx.rotate(wobble);
 
-  drawSpinningLogo(radius * TOP_VISUAL_RADIUS_SCALE, spinRatio);
+  drawSpinningLogo(radius * TOP_VISUAL_RADIUS_SCALE);
 
   ctx.restore();
 }
