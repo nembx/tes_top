@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TES 陀螺场</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">TES</div>
+          <div>
+            <p class="eyebrow">TOP ESPORTS SPINNING TOP</p>
+            <h1>TES 陀螺场</h1>
+          </div>
+        </div>
+
+        <div class="hud" aria-label="陀螺状态">
+          <div class="hud-item">
+            <span>转速</span>
+            <strong><output id="speedValue">0</output> rpm</strong>
+          </div>
+          <div class="hud-item">
+            <span>连击</span>
+            <strong><output id="comboValue">0</output></strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="stage-shell">
+        <canvas id="stage" aria-label="TES 图标陀螺互动场"></canvas>
+
+        <div class="toolbar" aria-label="操作">
+          <button id="whipButton" type="button">
+            抽打
+          </button>
+          <button id="resetButton" type="button">重置</button>
+          <label class="file-button" for="logoUpload">导入图标</label>
+          <input id="logoUpload" type="file" accept="image/*" />
+        </div>
+      </main>
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
