@@ -1,5 +1,5 @@
 const canvas = document.querySelector("#stage");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
 const speedValue = document.querySelector("#speedValue");
 const comboValue = document.querySelector("#comboValue");
 const whipButton = document.querySelector("#whipButton");
@@ -7,6 +7,8 @@ const resetButton = document.querySelector("#resetButton");
 const logoUpload = document.querySelector("#logoUpload");
 const logoBuffer = document.createElement("canvas");
 const logoBufferCtx = logoBuffer.getContext("2d");
+const logoBaseBuffer = document.createElement("canvas");
+const logoBaseBufferCtx = logoBaseBuffer.getContext("2d");
 
 const TAU = Math.PI * 2;
 const DEFAULT_LOGO_SRC = "./assets/tes-logo-source-20200514.png";
@@ -30,6 +32,11 @@ const state = {
   comboTimer: 0,
   logoImage: null,
   logoReady: false,
+  render: {
+    logoBaseDirty: true,
+    logoBaseRadius: 0,
+    logoBaseSize: 0,
+  },
   pointer: {
     down: false,
     x: 0,
@@ -54,6 +61,7 @@ const state = {
     radius: 88,
     angle: 0,
     spin: 0,
+    visualSpin: 0,
     wobble: 0.04,
     lastHit: 0,
   },
@@ -71,12 +79,18 @@ function distance(a, b, c, d) {
   return Math.hypot(a - c, b - d);
 }
 
+function markLogoBaseDirty() {
+  state.render.logoBaseDirty = true;
+}
+
 function loadLogo(src) {
   state.logoReady = false;
+  markLogoBaseDirty();
   const image = new Image();
   image.onload = () => {
     state.logoImage = image;
     state.logoReady = true;
+    markLogoBaseDirty();
   };
   image.src = src;
 }
@@ -95,9 +109,15 @@ function resize() {
   canvas.width = Math.max(1, Math.floor(rect.width * state.dpr));
   canvas.height = Math.max(1, Math.floor(rect.height * state.dpr));
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
   state.groundY = state.height * 0.78;
-  state.top.radius = clamp(Math.min(state.width, state.height) * 0.15, 64, 116);
+  const nextRadius = clamp(Math.min(state.width, state.height) * 0.15, 64, 116);
+  if (Math.abs(nextRadius - state.top.radius) > 0.5) {
+    markLogoBaseDirty();
+  }
+  state.top.radius = nextRadius;
 
   if (!Number.isFinite(state.top.x) || state.top.x === 0) {
     placeTop();
@@ -118,6 +138,7 @@ function resetTop() {
     vy: 0,
     angle: -0.35,
     spin: 0,
+    visualSpin: 0,
     wobble: 0.04,
   });
   state.combo = 0;
@@ -259,7 +280,12 @@ function update(dt) {
   top.vx *= Math.exp(-dt * 1.25);
   top.vy *= Math.exp(-dt * 0.9);
   top.spin *= Math.exp(-dt * 0.095);
-  top.angle += top.spin * dt * 1.45;
+  const visualSpinEase = 1 - Math.exp(-dt * (Math.abs(top.spin) > Math.abs(top.visualSpin) ? 18 : 9));
+  top.visualSpin = lerp(top.visualSpin, top.spin, visualSpinEase);
+  if (Math.abs(top.visualSpin) < 0.005) {
+    top.visualSpin = 0;
+  }
+  top.angle += top.visualSpin * dt * 1.45;
   top.angle %= TAU;
   top.wobble = Math.max(0.018, top.wobble * Math.exp(-dt * 1.25));
 
@@ -283,7 +309,7 @@ function update(dt) {
   });
   state.whip.points = state.whip.points.filter((point) => point.life > 0);
 
-  speedValue.value = Math.round(Math.abs(top.spin) * 24);
+  speedValue.value = Math.round(Math.abs(top.visualSpin) * 24);
 }
 
 function drawBackdrop() {
@@ -366,6 +392,45 @@ function drawLogo(radius, targetCtx = ctx) {
   targetCtx.restore();
 }
 
+function ensureLogoBase(radius) {
+  const bufferSize = Math.ceil(radius * 2.25);
+  const needsRedraw =
+    state.render.logoBaseDirty ||
+    state.render.logoBaseSize !== bufferSize ||
+    Math.abs(state.render.logoBaseRadius - radius) > 0.5;
+
+  if (!needsRedraw) {
+    return bufferSize;
+  }
+
+  logoBaseBuffer.width = bufferSize;
+  logoBaseBuffer.height = bufferSize;
+  logoBaseBufferCtx.imageSmoothingEnabled = true;
+  logoBaseBufferCtx.imageSmoothingQuality = "high";
+  logoBaseBufferCtx.clearRect(0, 0, bufferSize, bufferSize);
+  logoBaseBufferCtx.save();
+  logoBaseBufferCtx.translate(bufferSize / 2, bufferSize / 2);
+  drawLogo(radius, logoBaseBufferCtx);
+  logoBaseBufferCtx.restore();
+
+  state.render.logoBaseDirty = false;
+  state.render.logoBaseRadius = radius;
+  state.render.logoBaseSize = bufferSize;
+  return bufferSize;
+}
+
+function prepareLogoFrameBuffer(size) {
+  if (logoBuffer.width !== size || logoBuffer.height !== size) {
+    logoBuffer.width = size;
+    logoBuffer.height = size;
+    logoBufferCtx.imageSmoothingEnabled = true;
+    logoBufferCtx.imageSmoothingQuality = "high";
+    return;
+  }
+
+  logoBufferCtx.clearRect(0, 0, size, size);
+}
+
 function drawLogoTurnFrame(radius, angle, alpha, shadeStrength) {
   const turn = Math.cos(angle);
   const side = Math.sin(angle);
@@ -373,14 +438,13 @@ function drawLogoTurnFrame(radius, angle, alpha, shadeStrength) {
   const turnAmount = 1 - faceAmount;
   const scaleX = 0.72 + Math.pow(faceAmount, 0.7) * 0.28;
   const shiftX = side * radius * 0.035;
-  const bufferSize = Math.ceil(radius * 2.25);
+  const bufferSize = ensureLogoBase(radius);
 
-  logoBuffer.width = bufferSize;
-  logoBuffer.height = bufferSize;
-  logoBufferCtx.clearRect(0, 0, bufferSize, bufferSize);
+  prepareLogoFrameBuffer(bufferSize);
   logoBufferCtx.save();
+  logoBufferCtx.drawImage(logoBaseBuffer, 0, 0);
+
   logoBufferCtx.translate(bufferSize / 2, bufferSize / 2);
-  drawLogo(radius, logoBufferCtx);
 
   if (shadeStrength > 0) {
     const shade = logoBufferCtx.createLinearGradient(-radius, 0, radius, 0);
@@ -411,13 +475,14 @@ function drawLogoTurnFrame(radius, angle, alpha, shadeStrength) {
 }
 
 function drawSpinningLogo(radius, spinRatio) {
-  const direction = Math.sign(state.top.spin) || 1;
+  const visualSpin = state.top.visualSpin;
+  const direction = Math.sign(visualSpin || state.top.spin) || 1;
   const turnAmount = 1 - Math.abs(Math.cos(state.top.angle));
   const shadeStrength = 0.08 + turnAmount * 0.26 + spinRatio * 0.04;
-  const blurSpan = clamp(Math.abs(state.top.spin) * 0.012, 0.08, 0.62);
-  const samples = spinRatio > 0.72 ? 7 : spinRatio > 0.38 ? 5 : 3;
+  const blurSpan = clamp(Math.abs(visualSpin) * 0.014, 0.06, 0.78);
+  const samples = spinRatio > 0.78 ? 9 : spinRatio > 0.44 ? 7 : spinRatio > 0.18 ? 5 : 3;
 
-  if (spinRatio > 0.18) {
+  if (spinRatio > 0.12) {
     const center = (samples - 1) / 2;
 
     for (let i = 0; i < samples; i += 1) {
@@ -429,7 +494,7 @@ function drawSpinningLogo(radius, spinRatio) {
 
       const distanceFromCenter = Math.abs(offsetIndex) / center;
       const offset = direction * offsetIndex * (blurSpan / center);
-      const alpha = spinRatio * 0.12 * (1 - distanceFromCenter * 0.42);
+      const alpha = spinRatio * 0.1 * (1 - distanceFromCenter * 0.46);
       drawLogoTurnFrame(radius, state.top.angle + offset, alpha, shadeStrength * 0.72);
     }
   }
@@ -484,8 +549,8 @@ function drawWhip(points, baseColor = "#b27342") {
 function drawTop() {
   const top = state.top;
   const radius = top.radius;
-  const spinRatio = clamp(Math.abs(top.spin) / 48, 0, 1);
-  const motionRatio = clamp(Math.abs(top.spin) / 3, 0, 1);
+  const spinRatio = clamp(Math.abs(top.visualSpin) / 48, 0, 1);
+  const motionRatio = clamp(Math.abs(top.visualSpin) / 3, 0, 1);
   const stability = 1 - spinRatio;
   const wobbleAmount = top.wobble * motionRatio * (0.06 + stability * stability * 0.54);
   const wobble = Math.sin(state.time * 10 + top.angle * 0.55) * wobbleAmount;
@@ -519,10 +584,19 @@ function draw() {
 }
 
 let previous = performance.now();
+const MAX_FRAME_DT = 0.05;
+const SIMULATION_STEP = 1 / 90;
+
 function frame(now) {
-  const dt = Math.min(0.033, (now - previous) / 1000);
+  let remaining = Math.min(MAX_FRAME_DT, (now - previous) / 1000);
   previous = now;
-  update(dt);
+
+  while (remaining > 0) {
+    const step = Math.min(remaining, SIMULATION_STEP);
+    update(step);
+    remaining -= step;
+  }
+
   draw();
   requestAnimationFrame(frame);
 }
@@ -596,6 +670,7 @@ logoUpload.addEventListener("change", () => {
     URL.revokeObjectURL(url);
     state.logoImage = image;
     state.logoReady = true;
+    markLogoBaseDirty();
   };
   image.src = url;
 });
